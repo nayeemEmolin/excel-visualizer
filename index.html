@@ -35,7 +35,7 @@
       const [playing, setPlaying] = useState(true);
       const [chartType, setChartType] = useState("line");
       const [darkMode, setDarkMode] = useState(false);
-      const [language, setLanguage] = useState('en'); // language selection
+      const [language, setLanguage] = useState('en'); // Language selection
       const intervalRef = useRef(null);
       const chartRef = useRef(null);
       const [audio, setAudio] = useState(null); // For voice narration
@@ -128,36 +128,36 @@
         if (lang === 'en') {
           setAudio(new SpeechSynthesisUtterance('Excel data animation started'));
         } else {
-          setAudio(new SpeechSynthesisUtterance('Inicio de animación de datos de Excel'));
+          setAudio(new SpeechSynthesisUtterance('এক্সেল ডেটা অ্যানিমেশন শুরু হয়েছে'));
         }
         window.speechSynthesis.speak(audio);
       };
 
       return (
         <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-black'} max-w-2xl mx-auto p-6 mt-10 rounded-xl shadow-lg`}>
-          <h1 className="text-2xl font-bold text-center mb-4">Excel to Motion Chart</h1>
+          <h1 className="text-2xl font-bold text-center mb-4">{language === 'en' ? 'Excel to Motion Chart' : 'এক্সেল থেকে মোশন চার্ট'}</h1>
 
           <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="mb-4 w-full" />
 
           <div className="grid grid-cols-2 gap-2 mb-4">
             <button onClick={() => setPlaying(!playing)} className="bg-blue-500 text-white py-2 rounded">
-              {playing ? "Pause" : "Play"}
+              {playing ? (language === 'en' ? "Pause" : "পজ") : (language === 'en' ? "Play" : "প্লে")}
             </button>
             <button onClick={() => setAnimatedData([])} className="bg-yellow-500 text-white py-2 rounded">
-              Rewind
+              {language === 'en' ? "Rewind" : "রিওয়াইন্ড"}
             </button>
             <button onClick={saveImage} className="bg-green-500 text-white py-2 rounded">
-              Save Image
+              {language === 'en' ? "Save Image" : "চিত্র সংরক্ষণ করুন"}
             </button>
             <button onClick={captureAnimation} className="bg-red-500 text-white py-2 rounded">
-              Capture Animation
+              {language === 'en' ? "Capture Animation" : "অ্যানিমেশন ক্যাপচার করুন"}
             </button>
           </div>
 
           <select className="w-full mb-4" value={chartType} onChange={(e) => setChartType(e.target.value)}>
-            <option value="line">Line Chart</option>
-            <option value="bar">Bar Chart</option>
-            <option value="pie">Pie Chart</option>
+            <option value="line">{language === 'en' ? "Line Chart" : "লাইন চার্ট"}</option>
+            <option value="bar">{language === 'en' ? "Bar Chart" : "বার চার্ট"}</option>
+            <option value="pie">{language === 'en' ? "Pie Chart" : "পাই চার্ট"}</option>
           </select>
 
           <div className="w-full h-64">
@@ -166,11 +166,11 @@
 
           <div className="mt-4">
             <button onClick={() => setDarkMode(!darkMode)} className="bg-gray-500 text-white py-2 rounded">
-              {darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              {darkMode ? (language === 'en' ? "Switch to Light Mode" : "লাইট মোডে সুইচ করুন") : (language === 'en' ? "Switch to Dark Mode" : "ডার্ক মোডে সুইচ করুন")}
             </button>
             <select onChange={(e) => changeLanguage(e.target.value)} className="ml-4 p-2">
-              <option value="en">English</option>
-              <option value="es">Español</option>
+              <option value="en">{language === 'en' ? "English" : "ইংরেজি"}</option>
+              <option value="bn">{language === 'en' ? "Bangla" : "বাংলা"}</option>
             </select>
           </div>
         </div>
@@ -181,3 +181,4 @@
   </script>
 </body>
 </html>
+
