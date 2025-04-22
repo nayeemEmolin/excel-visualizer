@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Statistical Analytics Dashboard</title>
+  <title>Excel to Motion Chart with Filters</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"/>
-
   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -21,23 +20,26 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    function StatisticalAnalyticsDashboard() {
+    function ExcelVisualizer() {
+      const [labels, setLabels] = useState([]);
       const [data, setData] = useState([]);
       const [filteredData, setFilteredData] = useState([]);
-      const [selectedChart, setSelectedChart] = useState("line");
-      const [descriptiveStats, setDescriptiveStats] = useState({});
+      const [categories, setCategories] = useState([]);
+      const [selectedCategory, setSelectedCategory] = useState('');
+      const [numericRange, setNumericRange] = useState([0, 100]);
+      const [chartType, setChartType] = useState("line");
       const chartRef = useRef(null);
 
-      // Function to calculate and set descriptive statistics
-      const calculateStats = (data) => {
-        const values = data.map(item => item[1]); // Assuming 2nd column is numeric
-        const mean = values.reduce((a, b) => a + b, 0) / values.length;
-        const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
-        const stdDev = Math.sqrt(variance);
-        setDescriptiveStats({ mean, variance, stdDev });
-      };
+      useEffect(() => {
+        renderChart();
+      }, [filteredData, chartType]);
 
-      // File upload handler
+      useEffect(() => {
+        if (data.length > 0) {
+          setFilteredData(data); // Default: no filter
+        }
+      }, [data]);
+
       const handleFileUpload = (e) => {
         const file = e.target.files[0];
         const reader = new FileReader();
@@ -45,25 +47,38 @@
           const wb = XLSX.read(evt.target.result, { type: "binary" });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-          setData(rows.slice(1));
-          setFilteredData(rows.slice(1));
-          calculateStats(rows.slice(1));
+          const x = rows.slice(1).map(r => r[0]);
+          const y = rows.slice(1).map(r => r[1]);
+          const cat = rows.slice(1).map(r => r[2]); // Assuming column 3 is for categories
+
+          setLabels(x);
+          setData(y);
+          setCategories([...new Set(cat)]); // unique categories
+          setFilteredData(y);
         };
         reader.readAsBinaryString(file);
       };
 
-      // Render the chart
+      const applyFilters = () => {
+        let filtered = data;
+        if (selectedCategory) {
+          filtered = filtered.filter((_, index) => categories[index] === selectedCategory);
+        }
+        filtered = filtered.filter(value => value >= numericRange[0] && value <= numericRange[1]);
+        setFilteredData(filtered);
+      };
+
       const renderChart = () => {
-        const ctx = document.getElementById("chartCanvas").getContext("2d");
+        const ctx = document.getElementById("myChart").getContext("2d");
         if (chartRef.current) chartRef.current.destroy();
         
         chartRef.current = new Chart(ctx, {
-          type: selectedChart,
+          type: chartType,
           data: {
-            labels: filteredData.map(row => row[0]),
+            labels: labels.slice(0, filteredData.length),
             datasets: [{
-              label: 'Data',
-              data: filteredData.map(row => row[1]),
+              label: "Filtered Data",
+              data: filteredData,
               borderColor: "rgba(75, 192, 192, 1)",
               backgroundColor: "rgba(75, 192, 192, 0.2)",
               fill: true
@@ -76,68 +91,65 @@
         });
       };
 
-      useEffect(() => {
-        renderChart();
-      }, [filteredData, selectedChart]);
-
-      // Filter data
-      const filterData = (filterValue) => {
-        const newData = data.filter(item => item[0].includes(filterValue));
-        setFilteredData(newData);
-      };
-
       return (
-        <div className="bg-white p-6 rounded-xl shadow-lg max-w-3xl mx-auto">
-          <h1 className="text-3xl font-bold text-center mb-6">Statistical Analytics Dashboard</h1>
+        <div className="max-w-2xl mx-auto bg-white p-6 mt-10 rounded-xl shadow-lg">
+          <h1 className="text-2xl font-bold text-center mb-4">Excel to Motion Chart with Filters</h1>
 
-          <div className="mb-6">
-            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="w-full p-2 border rounded"/>
+          <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="mb-4 w-full" />
+
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <button onClick={applyFilters} className="bg-blue-500 text-white py-2 rounded">Apply Filters</button>
           </div>
 
           <div className="mb-4">
-            <h3 className="text-xl">Descriptive Statistics</h3>
-            <ul>
-              <li>Mean: {descriptiveStats.mean}</li>
-              <li>Variance: {descriptiveStats.variance}</li>
-              <li>Standard Deviation: {descriptiveStats.stdDev}</li>
-            </ul>
-          </div>
-
-          <div className="mb-6">
-            <label htmlFor="chartSelect" className="text-lg">Select Chart Type:</label>
-            <select id="chartSelect" className="w-full p-2 mt-2" onChange={(e) => setSelectedChart(e.target.value)}>
-              <option value="line">Line Chart</option>
-              <option value="bar">Bar Chart</option>
-              <option value="pie">Pie Chart</option>
-              <option value="scatter">Scatter Plot</option>
+            <label htmlFor="category" className="block">Select Category:</label>
+            <select 
+              id="category" 
+              className="w-full mt-2" 
+              value={selectedCategory} 
+              onChange={(e) => setSelectedCategory(e.target.value)}>
+              <option value="">All</option>
+              {categories.map((category, index) => (
+                <option key={index} value={category}>{category}</option>
+              ))}
             </select>
           </div>
 
-          <div className="mb-6">
-            <label htmlFor="filterInput" className="text-lg">Filter Data:</label>
+          <div className="mb-4">
+            <label htmlFor="numericRange" className="block">Numeric Range:</label>
             <input
-              id="filterInput"
-              type="text"
-              className="w-full p-2 mt-2"
-              placeholder="Filter by category"
-              onChange={(e) => filterData(e.target.value)}
+              type="range"
+              min="0"
+              max="100"
+              value={numericRange[0]}
+              onChange={(e) => setNumericRange([parseInt(e.target.value), numericRange[1]])}
+              className="w-full mt-2"
             />
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={numericRange[1]}
+              onChange={(e) => setNumericRange([numericRange[0], parseInt(e.target.value)])}
+              className="w-full mt-2"
+            />
+            <div>Range: {numericRange[0]} - {numericRange[1]}</div>
           </div>
 
-          <div className="mb-6">
-            <canvas id="chartCanvas" width="400" height="300"></canvas>
-          </div>
+          <select className="w-full mb-4" value={chartType} onChange={(e) => setChartType(e.target.value)}>
+            <option value="line">Line Chart</option>
+            <option value="bar">Bar Chart</option>
+            <option value="pie">Pie Chart</option>
+          </select>
 
-          <div className="mb-6 flex justify-between">
-            <button className="bg-blue-500 text-white p-2 rounded">Download CSV</button>
-            <button className="bg-green-500 text-white p-2 rounded">Save Chart as Image</button>
-            <button className="bg-red-500 text-white p-2 rounded">Capture Animation</button>
+          <div className="w-full h-64">
+            <canvas id="myChart" width="400" height="300"></canvas>
           </div>
         </div>
       );
     }
 
-    ReactDOM.render(<StatisticalAnalyticsDashboard />, document.getElementById("root"));
+    ReactDOM.render(<ExcelVisualizer />, document.getElementById("root"));
   </script>
 </body>
 </html>
