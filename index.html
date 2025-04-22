@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excel to Motion Chart</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/react@17.0.2/umd/react.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@17.0.2/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.17.3/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/framer-motion@4.1.17/dist/framer-motion.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@0.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ccapture.js@1.0.3/CCapture.all.min.js"></script>
+</head>
+<body class="bg-gray-100">
+  <div id="root"></div>
+
+  <script type="text/javascript">
+    const { useState, useEffect, useRef } = React;
+    const { motion } = window["framer-motion"];
+    const XLSX = window.XLSX;
+    const { Line, Bar, Pie } = window.ChartJS;
+
+    function ExcelVisualizer() {
+      const [sheets, setSheets] = useState([]);
+      const [selectedSheet, setSelectedSheet] = useState("");
+      const [rawData, setRawData] = useState([]);
+      const [data, setData] = useState([]);
+      const [animatedData, setAnimatedData] = useState([]);
+      const [labels, setLabels] = useState([]);
+      const [chartType, setChartType] = useState("line");
+      const [xIndex, setXIndex] = useState(0);
+      const [yIndex, setYIndex] = useState(1);
+      const [threshold, setThreshold] = useState(0);
+      const [dateRange, setDateRange] = useState({ from: "", to: "" });
+      const [playing, setPlaying] = useState(true);
+      const intervalRef = useRef(null);
+      const chartRef = useRef();
+
+      useEffect(() => {
+        if (playing && data.length > 0) {
+          let i = animatedData.length;
+          intervalRef.current = setInterval(() => {
+            setAnimatedData((prev) => [...prev, data[i]]);
+            i++;
+            if (i >= data.length) clearInterval(intervalRef.current);
+          }, 100);
+          return () => clearInterval(intervalRef.current);
+        }
+      }, [data, playing]);
+
+      const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const bstr = evt.target.result;
+          const wb = XLSX.read(bstr, { type: "binary" });
+          setSheets(wb.SheetNames);
+          setSelectedSheet(wb.SheetNames[0]);
+          loadSheet(wb, wb.SheetNames[0]);
+        };
+        reader.readAsBinaryString(file);
+      };
+
+      const loadSheet = (wb, sheetName) => {
+        const ws = wb.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        setRawData(jsonData.slice(1));
+        applyFilters(jsonData.slice(1));
+      };
+
+      const applyFilters = (rows) => {
+        const filtered = rows.filter((row) => {
+          const yVal = parseFloat(row[yIndex]);
+          const date = row[xIndex];
+          const isAboveThreshold = yVal >= threshold;
+          const isInRange =
+            (!dateRange.from || date >= dateRange.from) &&
+            (!dateRange.to || date <= dateRange.to);
+          return isAboveThreshold && isInRange;
+        });
+        const x = filtered.map((r) => r[xIndex]);
+        const y = filtered.map((r) => r[yIndex]);
+        setLabels(x);
+        setAnimatedData([]);
+        setData(y);
+      };
+
+      const handleSheetChange = (e) => {
+        const sheetName = e.target.value;
+        setSelectedSheet(sheetName);
+        const file = document.querySelector("input[type='file']").files[0];
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const bstr = evt.target.result;
+          const wb = XLSX.read(bstr, { type: "binary" });
+          loadSheet(wb, sheetName);
+        };
+        reader.readAsBinaryString(file);
+      };
+
+      const chartData = {
+        labels: labels.slice(0, animatedData.length),
+        datasets: [
+          {
+            label: "Excel Data",
+            data: animatedData,
+            backgroundColor: "rgba(62, 149, 205, 0.5)",
+            borderColor: "#3e95cd",
+            fill: true,
+          },
+        ],
+      };
+
+      const renderChart = () => {
+        switch (chartType) {
+          case "bar":
+            return <Bar ref={chartRef} data={chartData} options={{ animation: false }} />;
+          case "pie":
+            return <Pie ref={chartRef} data={chartData} options={{ animation: false }} />;
+          default:
+            return <Line ref={chartRef} data={chartData} options={{ animation: false }} />;
+        }
+      };
+
+      const saveChartAsImage = () => {
+        const canvas = document.querySelector("canvas");
+        html2canvas(canvas).then((canvas) => {
+          canvas.toBlob((blob) => saveAs(blob, "chart.png"));
+        });
+      };
+
+      const saveChartAsGIF = () => {
+        const capturer = new CCapture({ format: "gif", framerate: 10 });
+        const canvas = document.querySelector("canvas");
+        capturer.start();
+        let i = 0;
+        const interval = setInterval(() => {
+          capturer.capture(canvas);
+          i++;
+          if (i >= 60) {
+            clearInterval(interval);
+            capturer.stop();
+            capturer.save();
+          }
+        }, 100);
+      };
+
+      const downloadCSV = () => {
+        const ws = XLSX.utils.aoa_to_sheet([["X", "Y"], ...labels.map((x, i) => [x, data[i]])]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "ChartData");
+        XLSX.writeFile(wb, "chart_data.xlsx");
+      };
+
+      const handleJSONUpload = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const json = JSON.parse(evt.target.result);
+          const keys = Object.keys(json[0]);
+          const values = json.map(Object.values);
+          setRawData(values);
+          applyFilters(values);
+        };
+        reader.readAsText(file);
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-100 p-4">
+          <motion.div
+            className="max-w-xl mx-auto bg-white p-6 rounded-2xl shadow-xl"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            style={{ filter: "blur(0.3px)" }}
+          >
+            <h2 className="text-2xl font-bold mb-4 text-center">Excel to Motion Chart</h2>
+
+            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="mb-2 w-full" />
+            <input type="file" accept=".json" onChange={handleJSONUpload} className="mb-4 w-full" />
+
+            {sheets.length > 1 && (
+              <select className="mb-4 w-full" value={selectedSheet} onChange={handleSheetChange}>
+                {sheets.map((sheet, i) => (
+                  <option key={i} value={sheet}>{sheet}</option>
+                ))}
+              </select>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button onClick={() => setPlaying(!playing)} className="bg-blue-500 text-white rounded-xl py-1">
+                {playing ? "Pause" : "Play"}
+              </button>
+              <button onClick={() => setAnimatedData([])} className="bg-yellow-500 text-white rounded-xl py-1">
+                Rewind
+              </button>
+            </div>
+
+            <div className="mb-4">
+              <label>Chart Type:</label>
+              <select value={chartType} onChange={(e) => setChartType(e.target.value)} className="w-full">
+                <option value="line">Line</option>
+                <option value="bar">Bar</option>
+                <option value="pie">Pie</option>
+              </select>
+            </div>
+
+            <div className="mb-2">
+              <label>X Index: </label>
+              <input
+                type="number"
+                value={xIndex}
+                onChange={(e) => setXIndex(Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="mb-2">
+              <label>Y Index: </label>
+              <input
+                type="number"
+                value={yIndex}
+                onChange={(e) => setYIndex(Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="mb-2">
+              <label>Threshold: </label>
+              <input
+                type="number"
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="mb-2">
+              <label>From: </label>
+              <input
+                type="date"
+                value={dateRange.from}
+                onChange={(e) => setDateRange((prev) => ({ ...prev, from: e.target.value }))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="mb-2">
+              <label>To: </label>
+              <input
+                type="date"
+                value={dateRange.to}
+                onChange={(e) => setDateRange((prev) => ({ ...prev, to: e.target.value }))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <button onClick={saveChartAsImage} className="bg-green-500 text-white rounded-xl py-1">Save Image</button>
+              <button onClick={saveChartAsGIF} className="bg-red-500 text-white rounded-xl py-1">Save GIF</button>
+              <button onClick={downloadCSV} className="bg-indigo-500 text-white rounded-xl py-1">Download CSV</button>
+            </div>
+
+            {renderChart()}
+          </motion.div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<ExcelVisualizer />, document.getElementById("root"));
+  </script>
+</body>
+</html>
