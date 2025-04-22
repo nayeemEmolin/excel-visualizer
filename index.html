@@ -1,10 +1,130 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Test Page</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Excel to Motion Chart</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"/>
+  
+  <!-- React and Babel -->
+  <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+
+  <!-- XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.17.3/dist/xlsx.full.min.js"></script>
+
+  <!-- Utilities -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@0.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ccapture.js@1.0.3/CCapture.all.min.js"></script>
 </head>
-<body>
-  <h1>Hello World!</h1>
+<body class="bg-gray-100">
+  <div id="root"></div>
+
+  <!-- Your JSX Script -->
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function ExcelVisualizer() {
+      const [labels, setLabels] = useState([]);
+      const [data, setData] = useState([]);
+      const [animatedData, setAnimatedData] = useState([]);
+      const [playing, setPlaying] = useState(true);
+      const [chartType, setChartType] = useState("line");
+      const intervalRef = useRef(null);
+      const chartRef = useRef(null);
+
+      useEffect(() => {
+        if (playing && data.length > 0) {
+          let i = animatedData.length;
+          intervalRef.current = setInterval(() => {
+            setAnimatedData((prev) => [...prev, data[i]]);
+            i++;
+            if (i >= data.length) clearInterval(intervalRef.current);
+          }, 100);
+          return () => clearInterval(intervalRef.current);
+        }
+      }, [playing, data]);
+
+      useEffect(() => {
+        renderChart();
+      }, [animatedData, chartType]);
+
+      const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const wb = XLSX.read(evt.target.result, { type: "binary" });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+          const x = rows.slice(1).map(r => r[0]);
+          const y = rows.slice(1).map(r => r[1]);
+          setLabels(x);
+          setData(y);
+          setAnimatedData([]);
+        };
+        reader.readAsBinaryString(file);
+      };
+
+      const renderChart = () => {
+        const ctx = document.getElementById("myChart").getContext("2d");
+        if (chartRef.current) chartRef.current.destroy();
+
+        chartRef.current = new Chart(ctx, {
+          type: chartType,
+          data: {
+            labels: labels.slice(0, animatedData.length),
+            datasets: [{
+              label: "Excel Data",
+              data: animatedData,
+              borderColor: "rgba(75, 192, 192, 1)",
+              backgroundColor: "rgba(75, 192, 192, 0.2)",
+              fill: true
+            }]
+          },
+          options: {
+            animation: false,
+            responsive: true,
+            maintainAspectRatio: false
+          }
+        });
+      };
+
+      return (
+        <div className="max-w-2xl mx-auto bg-white p-6 mt-10 rounded-xl shadow-lg">
+          <h1 className="text-2xl font-bold text-center mb-4">Excel to Motion Chart</h1>
+
+          <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="mb-4 w-full" />
+
+          <div className="grid grid-cols-2 gap-2 mb-4">
+            <button onClick={() => setPlaying(!playing)} className="bg-blue-500 text-white py-2 rounded">
+              {playing ? "Pause" : "Play"}
+            </button>
+            <button onClick={() => setAnimatedData([])} className="bg-yellow-500 text-white py-2 rounded">
+              Rewind
+            </button>
+          </div>
+
+          <select className="w-full mb-4" value={chartType} onChange={(e) => setChartType(e.target.value)}>
+            <option value="line">Line Chart</option>
+            <option value="bar">Bar Chart</option>
+            <option value="pie">Pie Chart</option>
+          </select>
+
+          <div className="w-full h-64">
+            <canvas id="myChart" width="400" height="300"></canvas>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.render(<ExcelVisualizer />, document.getElementById("root"));
+  </script>
 </body>
 </html>
+
 
