@@ -3,21 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Excel to Motion Chart</title>
+  <title>Statistical Analytics Dashboard</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"/>
-  
-  <!-- React and Babel -->
+
   <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
-
-  <!-- XLSX -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.17.3/dist/xlsx.full.min.js"></script>
-
-  <!-- Utilities -->
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@0.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/ccapture.js@1.0.3/CCapture.all.min.js"></script>
@@ -28,34 +21,23 @@
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
-    function ExcelVisualizer() {
-      const [labels, setLabels] = useState([]);
+    function StatisticalAnalyticsDashboard() {
       const [data, setData] = useState([]);
-      const [animatedData, setAnimatedData] = useState([]);
-      const [playing, setPlaying] = useState(true);
-      const [chartType, setChartType] = useState("line");
-      const [darkMode, setDarkMode] = useState(false);
-      const [language, setLanguage] = useState('en'); // Language selection
       const [filteredData, setFilteredData] = useState([]);
-      const intervalRef = useRef(null);
+      const [selectedChart, setSelectedChart] = useState("line");
+      const [descriptiveStats, setDescriptiveStats] = useState({});
       const chartRef = useRef(null);
 
-      useEffect(() => {
-        if (playing && data.length > 0) {
-          let i = animatedData.length;
-          intervalRef.current = setInterval(() => {
-            setAnimatedData((prev) => [...prev, data[i]]);
-            i++;
-            if (i >= data.length) clearInterval(intervalRef.current);
-          }, 100);
-          return () => clearInterval(intervalRef.current);
-        }
-      }, [playing, data]);
+      // Function to calculate and set descriptive statistics
+      const calculateStats = (data) => {
+        const values = data.map(item => item[1]); // Assuming 2nd column is numeric
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+        const stdDev = Math.sqrt(variance);
+        setDescriptiveStats({ mean, variance, stdDev });
+      };
 
-      useEffect(() => {
-        renderChart();
-      }, [animatedData, chartType]);
-
+      // File upload handler
       const handleFileUpload = (e) => {
         const file = e.target.files[0];
         const reader = new FileReader();
@@ -63,128 +45,99 @@
           const wb = XLSX.read(evt.target.result, { type: "binary" });
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-          const x = rows.slice(1).map(r => r[0]);
-          const y = rows.slice(1).map(r => r[1]);
-          setLabels(x);
-          setData(y);
+          setData(rows.slice(1));
           setFilteredData(rows.slice(1));
-          setAnimatedData([]);
+          calculateStats(rows.slice(1));
         };
         reader.readAsBinaryString(file);
       };
 
+      // Render the chart
       const renderChart = () => {
-        const ctx = document.getElementById("myChart").getContext("2d");
+        const ctx = document.getElementById("chartCanvas").getContext("2d");
         if (chartRef.current) chartRef.current.destroy();
-
+        
         chartRef.current = new Chart(ctx, {
-          type: chartType,
+          type: selectedChart,
           data: {
-            labels: labels.slice(0, animatedData.length),
+            labels: filteredData.map(row => row[0]),
             datasets: [{
-              label: "Excel Data",
-              data: animatedData,
+              label: 'Data',
+              data: filteredData.map(row => row[1]),
               borderColor: "rgba(75, 192, 192, 1)",
               backgroundColor: "rgba(75, 192, 192, 0.2)",
               fill: true
             }]
           },
           options: {
-            animation: false,
             responsive: true,
             maintainAspectRatio: false
           }
         });
       };
 
-      const filterData = (column) => {
-        const filtered = filteredData.filter(row => row[0] === column);
-        setLabels(filtered.map(row => row[0]));
-        setData(filtered.map(row => row[1]));
-        setAnimatedData([]);
-      };
+      useEffect(() => {
+        renderChart();
+      }, [filteredData, selectedChart]);
 
-      const saveImage = () => {
-        html2canvas(document.getElementById("myChart")).then(canvas => {
-          canvas.toBlob(function(blob) {
-            saveAs(blob, "chart.png");
-          });
-        });
-      };
-
-      const captureAnimation = () => {
-        const capturer = new CCapture({ format: 'webm', framerate: 30 });
-        capturer.start();
-
-        const interval = setInterval(() => {
-          capturer.capture(document.getElementById("myChart"));
-        }, 100);
-
-        setTimeout(() => {
-          clearInterval(interval);
-          capturer.stop();
-          capturer.save();
-        }, 3000); // Capture for 3 seconds
-      };
-
-      const changeLanguage = (lang) => {
-        setLanguage(lang);
+      // Filter data
+      const filterData = (filterValue) => {
+        const newData = data.filter(item => item[0].includes(filterValue));
+        setFilteredData(newData);
       };
 
       return (
-        <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-black'} max-w-2xl mx-auto p-6 mt-10 rounded-xl shadow-lg`}>
-          <h1 className="text-2xl font-bold text-center mb-4">{language === 'en' ? 'Excel to Motion Chart' : 'এক্সেল থেকে মোশন চার্ট'}</h1>
+        <div className="bg-white p-6 rounded-xl shadow-lg max-w-3xl mx-auto">
+          <h1 className="text-3xl font-bold text-center mb-6">Statistical Analytics Dashboard</h1>
 
-          <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="mb-4 w-full" />
-
-          <div className="grid grid-cols-2 gap-2 mb-4">
-            <button onClick={() => setPlaying(!playing)} className="bg-blue-500 text-white py-2 rounded">
-              {playing ? (language === 'en' ? "Pause" : "পজ") : (language === 'en' ? "Play" : "প্লে")}
-            </button>
-            <button onClick={() => setAnimatedData([])} className="bg-yellow-500 text-white py-2 rounded">
-              {language === 'en' ? "Rewind" : "রিওয়াইন্ড"}
-            </button>
-            <button onClick={saveImage} className="bg-green-500 text-white py-2 rounded">
-              {language === 'en' ? "Save Image" : "চিত্র সংরক্ষণ করুন"}
-            </button>
-            <button onClick={captureAnimation} className="bg-red-500 text-white py-2 rounded">
-              {language === 'en' ? "Capture Animation" : "অ্যানিমেশন ক্যাপচার করুন"}
-            </button>
+          <div className="mb-6">
+            <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="w-full p-2 border rounded"/>
           </div>
-
-          <select className="w-full mb-4" value={chartType} onChange={(e) => setChartType(e.target.value)}>
-            <option value="line">{language === 'en' ? "Line Chart" : "লাইন চার্ট"}</option>
-            <option value="bar">{language === 'en' ? "Bar Chart" : "বার চার্ট"}</option>
-            <option value="pie">{language === 'en' ? "Pie Chart" : "পাই চার্ট"}</option>
-          </select>
 
           <div className="mb-4">
-            <label className="text-sm">{language === 'en' ? 'Filter by Column' : 'কলাম দ্বারা ফিল্টার করুন'}</label>
-            <select onChange={(e) => filterData(e.target.value)} className="w-full">
-              {Array.from(new Set(filteredData.map(row => row[0]))).map((column, idx) => (
-                <option key={idx} value={column}>{column}</option>
-              ))}
+            <h3 className="text-xl">Descriptive Statistics</h3>
+            <ul>
+              <li>Mean: {descriptiveStats.mean}</li>
+              <li>Variance: {descriptiveStats.variance}</li>
+              <li>Standard Deviation: {descriptiveStats.stdDev}</li>
+            </ul>
+          </div>
+
+          <div className="mb-6">
+            <label htmlFor="chartSelect" className="text-lg">Select Chart Type:</label>
+            <select id="chartSelect" className="w-full p-2 mt-2" onChange={(e) => setSelectedChart(e.target.value)}>
+              <option value="line">Line Chart</option>
+              <option value="bar">Bar Chart</option>
+              <option value="pie">Pie Chart</option>
+              <option value="scatter">Scatter Plot</option>
             </select>
           </div>
 
-          <div className="w-full h-64">
-            <canvas id="myChart" width="400" height="300"></canvas>
+          <div className="mb-6">
+            <label htmlFor="filterInput" className="text-lg">Filter Data:</label>
+            <input
+              id="filterInput"
+              type="text"
+              className="w-full p-2 mt-2"
+              placeholder="Filter by category"
+              onChange={(e) => filterData(e.target.value)}
+            />
           </div>
 
-          <div className="mt-4">
-            <button onClick={() => setDarkMode(!darkMode)} className="bg-gray-500 text-white py-2 rounded">
-              {darkMode ? (language === 'en' ? "Switch to Light Mode" : "লাইট মোডে সুইচ করুন") : (language === 'en' ? "Switch to Dark Mode" : "ডার্ক মোডে সুইচ করুন")}
-            </button>
-            <select onChange={(e) => changeLanguage(e.target.value)} className="ml-4 p-2">
-              <option value="en">{language === 'en' ? "English" : "ইংরেজি"}</option>
-              <option value="bn">{language === 'en' ? "Bangla" : "বাংলা"}</option>
-            </select>
+          <div className="mb-6">
+            <canvas id="chartCanvas" width="400" height="300"></canvas>
+          </div>
+
+          <div className="mb-6 flex justify-between">
+            <button className="bg-blue-500 text-white p-2 rounded">Download CSV</button>
+            <button className="bg-green-500 text-white p-2 rounded">Save Chart as Image</button>
+            <button className="bg-red-500 text-white p-2 rounded">Capture Animation</button>
           </div>
         </div>
       );
     }
 
-    ReactDOM.render(<ExcelVisualizer />, document.getElementById("root"));
+    ReactDOM.render(<StatisticalAnalyticsDashboard />, document.getElementById("root"));
   </script>
 </body>
 </html>
