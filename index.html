@@ -25,7 +25,6 @@
 <body class="bg-gray-100">
   <div id="root"></div>
 
-  <!-- Your JSX Script -->
   <script type="text/babel">
     const { useState, useEffect, useRef } = React;
 
@@ -35,8 +34,11 @@
       const [animatedData, setAnimatedData] = useState([]);
       const [playing, setPlaying] = useState(true);
       const [chartType, setChartType] = useState("line");
+      const [darkMode, setDarkMode] = useState(false);
+      const [language, setLanguage] = useState('en'); // language selection
       const intervalRef = useRef(null);
       const chartRef = useRef(null);
+      const [audio, setAudio] = useState(null); // For voice narration
 
       useEffect(() => {
         if (playing && data.length > 0) {
@@ -94,8 +96,45 @@
         });
       };
 
+      // Save chart as an image
+      const saveImage = () => {
+        html2canvas(document.getElementById("myChart")).then(canvas => {
+          canvas.toBlob(function(blob) {
+            saveAs(blob, "chart.png");
+          });
+        });
+      };
+
+      // Capture animation as video
+      const captureAnimation = () => {
+        const capturer = new CCapture({ format: 'webm', framerate: 30 });
+        capturer.start();
+
+        const interval = setInterval(() => {
+          capturer.capture(document.getElementById("myChart"));
+        }, 100);
+
+        setTimeout(() => {
+          clearInterval(interval);
+          capturer.stop();
+          capturer.save();
+        }, 3000); // Capture for 3 seconds
+      };
+
+      // Language change function (for multilingual support)
+      const changeLanguage = (lang) => {
+        setLanguage(lang);
+        // Implementing a basic voice narration in selected language
+        if (lang === 'en') {
+          setAudio(new SpeechSynthesisUtterance('Excel data animation started'));
+        } else {
+          setAudio(new SpeechSynthesisUtterance('Inicio de animación de datos de Excel'));
+        }
+        window.speechSynthesis.speak(audio);
+      };
+
       return (
-        <div className="max-w-2xl mx-auto bg-white p-6 mt-10 rounded-xl shadow-lg">
+        <div className={`${darkMode ? 'bg-gray-800 text-white' : 'bg-white text-black'} max-w-2xl mx-auto p-6 mt-10 rounded-xl shadow-lg`}>
           <h1 className="text-2xl font-bold text-center mb-4">Excel to Motion Chart</h1>
 
           <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} className="mb-4 w-full" />
@@ -106,6 +145,12 @@
             </button>
             <button onClick={() => setAnimatedData([])} className="bg-yellow-500 text-white py-2 rounded">
               Rewind
+            </button>
+            <button onClick={saveImage} className="bg-green-500 text-white py-2 rounded">
+              Save Image
+            </button>
+            <button onClick={captureAnimation} className="bg-red-500 text-white py-2 rounded">
+              Capture Animation
             </button>
           </div>
 
@@ -118,6 +163,16 @@
           <div className="w-full h-64">
             <canvas id="myChart" width="400" height="300"></canvas>
           </div>
+
+          <div className="mt-4">
+            <button onClick={() => setDarkMode(!darkMode)} className="bg-gray-500 text-white py-2 rounded">
+              {darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            </button>
+            <select onChange={(e) => changeLanguage(e.target.value)} className="ml-4 p-2">
+              <option value="en">English</option>
+              <option value="es">Español</option>
+            </select>
+          </div>
         </div>
       );
     }
@@ -126,5 +181,3 @@
   </script>
 </body>
 </html>
-
-
